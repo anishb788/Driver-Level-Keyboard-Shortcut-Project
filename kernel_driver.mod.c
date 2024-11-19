@@ -37,8 +37,12 @@ static const char ____versions[]
 __used __section("__versions") =
 	"\x1c\x00\x00\x00\xca\x39\x82\x5b"
 	"__x86_return_thunk\0\0"
+	"\x28\x00\x00\x00\xb3\x54\xd5\x9e"
+	"unregister_keyboard_notifier\0\0\0\0"
 	"\x14\x00\x00\x00\xbb\x6d\xfb\xbd"
 	"__fentry__\0\0"
+	"\x24\x00\x00\x00\x10\x48\x55\x96"
+	"register_keyboard_notifier\0\0"
 	"\x10\x00\x00\x00\x7e\x3a\x2c\x12"
 	"_printk\0"
 	"\x18\x00\x00\x00\x3a\x0a\xd8\xfc"
@@ -48,4 +52,4 @@ __used __section("__versions") =
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "1E619622AC79273AF1B1F64");
+MODULE_INFO(srcversion, "ED08EA3C77A55426BD2D099");
