@@ -11,28 +11,41 @@ MODULE_VERSION("1.0");
 
 #define TARGET_KEY KEY_TAB  // Change this to the key you want to listen for
 
+//----- Normalize the keycode
+unsigned int normalize_keycode(unsigned int keycode) {
+    // Check if the keycode is an extended keycode (typically > KEY_MAX)
+    if (keycode >= KEY_OK) {  // Extended keycodes typically start at KEY_OK (153)
+        // Return the normalized base keycode for the extended key (e.g., extended Tab -> KEY_TAB)
+        return TARGET_KEY;
+    }
+    return keycode;  // For standard keycodes, return as-is
+}
+
 static int keyboard_notifier_callback(struct notifier_block *nblock,
                                       unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
 
-    // Normalize the keycode
-    unsigned int normalized_value = param->value & 0xFFFF;
+    // Normalize the keycode of the pressed key
+    unsigned int normalized_value = normalize_keycode(param->value);
+
+    // Normalize TARGET_KEY to handle both base and extended versions
+    unsigned int normalized_target_key = normalize_keycode(TARGET_KEY);
 
     // Debug: Log all key events
     if (action == KBD_KEYSYM) {
         printk(KERN_INFO "Key event: raw_value=%d normalized_value=%d TARGET_KEY=%d down=%d\n",
-               param->value, normalized_value, TARGET_KEY, param->down);
+               param->value, normalized_value, normalized_target_key, param->down);
 
         // Debug: Check if the raw or normalized key matches TARGET_KEY
         if (param->value == TARGET_KEY) {
             printk(KERN_INFO "Match found: raw_value matches TARGET_KEY\n");
         }
-        if (normalized_value == TARGET_KEY) {
+        if (normalized_value == normalized_target_key) {
             printk(KERN_INFO "Match found: normalized_value matches TARGET_KEY\n");
         }
 
         // Check for the target key
-        if (param->value == TARGET_KEY || normalized_value == TARGET_KEY) {
+        if (param->value == TARGET_KEY || normalized_value == normalized_target_key) {
             if (param->down) {
                 printk(KERN_INFO "Target key (%d or %d) pressed\n", param->value, normalized_value);
             } else {
