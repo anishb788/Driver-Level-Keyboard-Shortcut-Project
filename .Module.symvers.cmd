@@ -1,1 +1,1 @@
-savedcmd_/home/vmuser/Documents/drvproject/Driver-Level-Keyboard-Shortcut-Project/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/vmuser/Documents/drvproject/Driver-Level-Keyboard-Shortcut-Project/Module.symvers -T /home/vmuser/Documents/drvproject/Driver-Level-Keyboard-Shortcut-Project/modules.order -i Module.symvers -e 
+savedcmd_/home/user/Documents/project/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/user/Documents/project/Module.symvers -T /home/user/Documents/project/modules.order -i Module.symvers -e 

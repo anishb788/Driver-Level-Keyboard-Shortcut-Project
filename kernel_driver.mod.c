@@ -33,23 +33,17 @@ MODULE_INFO(retpoline, "Y");
 
 
 
-static const char ____versions[]
-__used __section("__versions") =
-	"\x1c\x00\x00\x00\xca\x39\x82\x5b"
-	"__x86_return_thunk\0\0"
-	"\x28\x00\x00\x00\xb3\x54\xd5\x9e"
-	"unregister_keyboard_notifier\0\0\0\0"
-	"\x14\x00\x00\x00\xbb\x6d\xfb\xbd"
-	"__fentry__\0\0"
-	"\x24\x00\x00\x00\x10\x48\x55\x96"
-	"register_keyboard_notifier\0\0"
-	"\x10\x00\x00\x00\x7e\x3a\x2c\x12"
-	"_printk\0"
-	"\x18\x00\x00\x00\x3a\x0a\xd8\xfc"
-	"module_layout\0\0\0"
-	"\x00\x00\x00\x00\x00\x00\x00\x00";
+static const struct modversion_info ____versions[]
+__used __section("__versions") = {
+	{ 0x5b8239ca, "__x86_return_thunk" },
+	{ 0x9ed554b3, "unregister_keyboard_notifier" },
+	{ 0xbdfb6dbb, "__fentry__" },
+	{ 0x96554810, "register_keyboard_notifier" },
+	{ 0x122c3a7e, "_printk" },
+	{ 0xf079b8f9, "module_layout" },
+};
 
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "ED08EA3C77A55426BD2D099");
+MODULE_INFO(srcversion, "C038F698E9FBAE8CE22270F");

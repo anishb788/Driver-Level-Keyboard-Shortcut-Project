@@ -15,17 +15,36 @@ static int keyboard_notifier_callback(struct notifier_block *nblock,
                                       unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
 
-    // Check if the event is a key event (KBD_KEYSYM)
-    if (action == KBD_KEYSYM && param->value == TARGET_KEY) {
-        if (param->down) {
-            printk(KERN_INFO "Target key (%d) pressed\n", TARGET_KEY);
-        } else {
-            printk(KERN_INFO "Target key (%d) released\n", TARGET_KEY);
+    // Normalize the keycode
+    unsigned int normalized_value = param->value & 0xFFFF;
+
+    // Debug: Log all key events
+    if (action == KBD_KEYSYM) {
+        printk(KERN_INFO "Key event: raw_value=%d normalized_value=%d TARGET_KEY=%d down=%d\n",
+               param->value, normalized_value, TARGET_KEY, param->down);
+
+        // Debug: Check if the raw or normalized key matches TARGET_KEY
+        if (param->value == TARGET_KEY) {
+            printk(KERN_INFO "Match found: raw_value matches TARGET_KEY\n");
+        }
+        if (normalized_value == TARGET_KEY) {
+            printk(KERN_INFO "Match found: normalized_value matches TARGET_KEY\n");
+        }
+
+        // Check for the target key
+        if (param->value == TARGET_KEY || normalized_value == TARGET_KEY) {
+            if (param->down) {
+                printk(KERN_INFO "Target key (%d or %d) pressed\n", param->value, normalized_value);
+            } else {
+                printk(KERN_INFO "Target key (%d or %d) released\n", param->value, normalized_value);
+            }
         }
     }
 
     return NOTIFY_OK;
 }
+
+
 
 
 // Notifier block
