@@ -15,6 +15,16 @@ MODULE_VERSION("0.1");
 
 #define DEVICE_NAME "key_event_device"
 #define TARGET_KEY KEY_TAB  // Change this to the key you want to listen for. We're using TAB for testing right now.
+#define BUFFER_SIZE 16  // Maximum number of events to store
+
+struct key_event {
+    char message[256];  // Store the event message
+};
+
+static struct key_event ring_buffer[BUFFER_SIZE];
+static int write_pos = 0;  // Next position to write
+static int read_pos = 0;   // Next position to read
+static int buffer_count = 0;  // Number of events in the buffer
 
 static dev_t dev_number;       // Device number
 static struct cdev c_dev;      // Character device structure
@@ -34,37 +44,18 @@ unsigned int normalize_keycode(unsigned int keycode) {
 static int keyboard_notifier_callback(struct notifier_block *nblock,
                                       unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
-
-    // Normalize the keycode of the pressed key, so that it works with the thing below this.
     unsigned int normalized_value = normalize_keycode(param->value);
 
-    // Normalize TARGET_KEY to handle both base and extended versions.
-    unsigned int normalized_target_key = normalize_keycode(TARGET_KEY);
+    if (action == KBD_KEYSYM && param->down) {
+        if (normalized_value == normalize_keycode(TARGET_KEY)) {
+            snprintf(ring_buffer[write_pos].message, sizeof(ring_buffer[write_pos].message),
+                     "Key %d pressed\n", TARGET_KEY);
 
-    // Check all key events. We'll need to change this later for only the specifics, but we can do that once we're more certain of our implementation.
-    if (action == KBD_KEYSYM) {
-        
-        // DEBUG: FOllowing section(s) before the taget key check are for showing our key values with the normalizer.
-        printk(KERN_INFO "Key event: raw_value=%d normalized_value=%d TARGET_KEY=%d down=%d\n",
-               param->value, normalized_value, normalized_target_key, param->down);
-
-        // This lets you know if our target key is pressed. Should work.
-        if (param->value == TARGET_KEY) {
-            printk(KERN_INFO "Match found: raw_value matches TARGET_KEY\n");
-        }
-        if (normalized_value == normalized_target_key) {
-            printk(KERN_INFO "Match found: normalized_value matches TARGET_KEY\n");
-        }
-
-        // Check for the target key. This is how we want our actual implementation to be.
-        if (param->value == TARGET_KEY || normalized_value == normalized_target_key) {
-            if (param->down) {
-                printk(KERN_INFO "Target key (%d or %d) pressed\n", param->value, normalized_value);
-                snprintf(message, sizeof(message), "Key %d pressed\n", TARGET_KEY);
-                message_size = strlen(message);
-                printk(KERN_INFO "Key event recorded: %s", message);
+            write_pos = (write_pos + 1) % BUFFER_SIZE;
+            if (buffer_count < BUFFER_SIZE) {
+                buffer_count++;
             } else {
-                printk(KERN_INFO "Target key (%d or %d) released\n", param->value, normalized_value);
+                read_pos = (read_pos + 1) % BUFFER_SIZE;
             }
         }
     }
@@ -76,17 +67,32 @@ static int keyboard_notifier_callback(struct notifier_block *nblock,
 // **Device File Operations**
 
 static ssize_t device_read(struct file *filp, char __user *buf, size_t len, loff_t *off) {
-    if (*off >= message_size) {
-        return 0;  // End of file
+    if (buffer_count == 0) {
+        return 0;  // No data to read
     }
 
-    if (copy_to_user(buf, message, message_size)) {
+    if (read_pos < 0 || read_pos >= BUFFER_SIZE) {
+        return -EFAULT;  // Invalid read position
+    }
+
+    // Ensure we include a newline for each message
+    char message_with_newline[260]; // 256 message + 1 newline + 1 null terminator
+    snprintf(message_with_newline, sizeof(message_with_newline), "%s\n", ring_buffer[read_pos].message);
+
+    size_t message_len = strlen(message_with_newline);
+    if (len < message_len) {
+        return -EINVAL;  // User buffer too small
+    }
+
+    if (copy_to_user(buf, message_with_newline, message_len)) {
         return -EFAULT;
     }
 
-    *off += message_size;
-    return message_size;
+    read_pos = (read_pos + 1) % BUFFER_SIZE;
+    buffer_count--;
+    return message_len;
 }
+
 
 static struct file_operations fops = {
     .owner = THIS_MODULE,
