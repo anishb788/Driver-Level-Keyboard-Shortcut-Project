@@ -1,14 +1,11 @@
 #!/bin/bash
-FIFO="/tmp/trigger_action"
-URL="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
-# Create the FIFO if it doesn't exist
-[ ! -p $FIFO ] && mkfifo $FIFO
+FILE="/tmp/trigger_action"
 
 while true; do
-    if read line < $FIFO; then
-        if [ "$line" = "open_firefox" ]; then
-            firefox "$URL" &
-        fi
-    fi
+    sleep 1
+    inotifywait -e close_write "$FILE" && \
+    cat "$FILE" | grep -q "open_firefox" && \
+    #/usr/bin/firefox "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    echo "Yeah, it's working."
 done
