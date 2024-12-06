@@ -8,18 +8,13 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 
-#define TARGET_KEY KEY_A // Replace with desired key
+#define TARGET_KEY 64353 // Replace with desired key
 
 //----- Normalize the keycode. This section was garbarge in the past. Thanks for fixing it.
 unsigned int normalizer(unsigned int keycode) {
-    // Check if the keycode is an extended keycode (typically > KEY_MAX, there's some cases where this is false, but we can worry about that if... Yeah we'll cross that bridge when we get to that.)
-    if (keycode >= KEY_OK) {  // Extended keycodes should start at KEY_OK (153)
-        // Return the normalized base keycode for the extended key (e.g., extended Tab -> KEY_TAB)
-        // Should NOT return the target key.
-        return TARGET_KEY;
-    }
-    return keycode;  // For standard keycodes, we let them through,
+    return keycode;
 }
+
 
 // Recommended by ChatGPT to prevent infinite recursion:
 static struct workqueue_struct *wq;

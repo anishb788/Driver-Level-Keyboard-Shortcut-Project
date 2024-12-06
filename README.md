@@ -5,3 +5,5 @@ You will need to install inotify-tools for this driver to work.
 
 sudo apt update
 sudo apt install inotify-tools
+
+The listener script needs to be run in a bash shell (WITHOUT ROOT)
