@@ -8,12 +8,7 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 
-#define TARGET_KEY 64353 // Replace with desired key
-
-//----- Normalize the keycode. This section was garbarge in the past. Thanks for fixing it.
-unsigned int normalizer(unsigned int keycode) {
-    return keycode;
-}
+#define TARGET_KEY 64353 // Replace with desired key. On emulator these will be extended key codes exclusively.
 
 
 // Recommended by ChatGPT to prevent infinite recursion:
@@ -34,11 +29,10 @@ void open_firefox_task(struct work_struct *work) {
 
 // End of this block, but more related below.
 
-//Normalized version of the kbd normalinator
+
 static int keyboard_notifier_callback(struct notifier_block *nblock,
                                       unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
-    unsigned int normalized_value = normalizer(param->value);
 
     if (action == KBD_KEYSYM && param->down) {
         /* Previously:
@@ -59,7 +53,7 @@ static int keyboard_notifier_callback(struct notifier_block *nblock,
         }
         */
         // Now, recommended by ChatGPT:
-        if (normalized_value == normalizer(TARGET_KEY)) {
+        if (param->value == TARGET_KEY) {
             printk(KERN_INFO "Shortcut detected: F8 key pressed.\n");
             schedule_work(&open_firefox_work);  // Defer work to the worker function
         }
@@ -107,5 +101,5 @@ module_init(shortcut_init);
 module_exit(shortcut_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Anish Boddu");
+MODULE_AUTHOR("Anish Boddu, Evan Digles");
 MODULE_DESCRIPTION("Keyboard shortcut driver to open Firefox with a URL");
