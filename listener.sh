@@ -9,7 +9,7 @@ while true; do
         COMMAND=$(cat "$FILE")
         if [ -n "$COMMAND" ]; then
             echo "Executing: $COMMAND"
-            sudo -u "$USER" bash -c "$COMMAND"
+            sudo -u "$USER" bash -c "$COMMAND" &
             echo "Command executed successfully."
         else
             echo "No command found in $FILE."
