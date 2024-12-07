@@ -1,5 +1,5 @@
 #include <linux/init.h>
-#include <linux/module.h> // We're working in VSCode, and VSCode doesn't like this. Ignore them.
+#include <linux/module.h>
 #include <linux/keyboard.h>
 #include <linux/input-event-codes.h>
 #include <linux/notifier.h>
@@ -8,56 +8,53 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 
-#define TARGET_KEY 64353 // Replace with desired key. On emulator these will be extended key codes exclusively.
+#define MAX_CMD_LEN 256
+#define MAX_KEYS 10
 
+struct key_command_mapping {
+    unsigned int key_code;
+    char command[MAX_CMD_LEN];
+};
+
+static struct key_command_mapping key_map[MAX_KEYS] = {
+    {64353, "/usr/bin/firefox \"https://www.youtube.com/watch?v=qWNQUvIk954\"\n"},
+    {64354, "xfce4-terminal\n"}
+};
 
 // Recommended by ChatGPT to prevent infinite recursion:
 static struct workqueue_struct *wq;
-static struct work_struct open_firefox_work;
+static struct work_struct write_command_work;
 
-void open_firefox_task(struct work_struct *work) {
+static char current_command[MAX_CMD_LEN];
+
+void write_command_task(struct work_struct *work) {
     struct file *file;
     file = filp_open("/tmp/trigger_action", O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (!IS_ERR(file)) {
-        kernel_write(file, "open_firefox\n", 13, &file->f_pos);
+        kernel_write(file, current_command, strlen(current_command), &file->f_pos);
         filp_close(file, NULL);
-        printk(KERN_INFO "File Created: /tmp/trigger_action\n");
+        printk(KERN_INFO "Command written: %s\n", current_command);
     } else {
         printk(KERN_ERR "Failed to write to /tmp/trigger_action.\n");
     }
 }
 
-// End of this block, but more related below.
-
-
+// Keyboard notifier callback
 static int keyboard_notifier_callback(struct notifier_block *nblock,
                                       unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
+    int i;
 
     if (action == KBD_KEYSYM && param->down) {
-        /* Previously:
-        if (normalized_value == normalizer(TARGET_KEY)) {
-            printk(KERN_INFO "Shortcut detected: F8 key pressed.\n");
-
-            // Do userspace action goes here
-            // this is such a massive pain in the ass to get working
-            struct file *file;
-            file = filp_open("/tmp/trigger_action", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-            if (!IS_ERR(file)) {
-                kernel_write(file, "open_firefox\n", 13, &file->f_pos);
-                filp_close(file, NULL);
-                printk(KERN_INFO "File Created \n");
-            } else {
-                printk(KERN_ERR "Failed to write to /tmp/trigger_action.\n");
+        for (i = 0; i < MAX_KEYS; i++) {
+            if (key_map[i].key_code == param->value) {
+                printk(KERN_INFO "Shortcut detected: Key %u pressed.\n", param->value);
+                strncpy(current_command, key_map[i].command, MAX_CMD_LEN);
+                current_command[MAX_CMD_LEN - 1] = '\0'; // Ensure null termination
+                schedule_work(&write_command_work);  // Schedule the work
+                break;
             }
         }
-        */
-        // Now, recommended by ChatGPT:
-        if (param->value == TARGET_KEY) {
-            printk(KERN_INFO "Shortcut detected: F8 key pressed.\n");
-            schedule_work(&open_firefox_work);  // Defer work to the worker function
-        }
-        // End of ChatGPT recommended segment.
     }
 
     return NOTIFY_OK;
@@ -75,14 +72,13 @@ static int __init shortcut_init(void) {
         printk(KERN_ERR "Failed to register keyboard notifier.\n");
         return ret;
     }
-    // ChatGPT recommended.
+
     wq = create_workqueue("shortcut_wq");
     if (!wq) {
         printk(KERN_ERR "Failed to create workqueue.\n");
         return -ENOMEM;
     }
-    INIT_WORK(&open_firefox_work, open_firefox_task);  // Initialize the work struct
-    // End of block.
+    INIT_WORK(&write_command_work, write_command_task);
     printk(KERN_INFO "Shortcut driver initialized successfully.\n");
     return 0;
 }
@@ -90,10 +86,8 @@ static int __init shortcut_init(void) {
 // Cleanup module
 static void __exit shortcut_exit(void) {
     unregister_keyboard_notifier(&nb);
-    // ChatGPT recommended segment.
-    flush_workqueue(wq);  // Ensure all scheduled work is completed
-    destroy_workqueue(wq); // Destroy the work queue
-    // End of block.
+    flush_workqueue(wq);
+    destroy_workqueue(wq);
     printk(KERN_INFO "Shortcut driver unloaded.\n");
 }
 
@@ -102,4 +96,4 @@ module_exit(shortcut_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Anish Boddu, Evan Digles");
-MODULE_DESCRIPTION("Keyboard shortcut driver to open Firefox with a URL");
+MODULE_DESCRIPTION("Keyboard shortcut driver to execute commands");
