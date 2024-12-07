@@ -1,0 +1,20 @@
+Okay so we gotta get this done, here's what I got cookin up
+
+What we have currently:
+- A kernel module that reads key presses and sends messages to a file
+- A listener daemon that will read what the driver does and execute userspace commands accordingly
+
+...holy bingus those 2 took too long to get working
+
+OKAY!
+
+What we need:
+- keyboard shortcuts (multiple keys at once)
+- a gui
+- a config file to pass to our driver
+
+The idea:
+
+We basically make a config file that interfaces with our kernel module directly,
+We then have a GUI that will modify the config file, as well as allowing the user to save changes and load the driver via command execution
+GUI will run in userspace, along with the listener to make things secure.
