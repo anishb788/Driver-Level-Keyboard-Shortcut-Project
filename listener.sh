@@ -51,6 +51,7 @@ while true; do
                 if $MATCH; then
                     echo "Executing: $COMMAND"
                     bash -c "$COMMAND" &
+                    sleep 2
                     break
                 fi
             done < "$CONFIG_FILE"
