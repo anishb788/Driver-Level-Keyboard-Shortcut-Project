@@ -15,6 +15,7 @@ struct key_info {
     unsigned int key_code;
     ktime_t press_time;
     bool pressed;
+    bool command_executed;  // Track if command has been executed
 };
 
 static struct key_info key_states[MAX_KEYS];
@@ -70,6 +71,7 @@ static int keyboard_notifier_callback(struct notifier_block *nblock, unsigned lo
                     key_states[i].key_code = param->value;
                     key_states[i].press_time = current_time_ms();
                     key_states[i].pressed = true;
+                    key_states[i].command_executed = false; // Reset execution flag
                     break;
                 }
             }
