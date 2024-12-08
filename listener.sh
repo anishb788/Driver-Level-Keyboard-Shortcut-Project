@@ -1,7 +1,11 @@
 #!/bin/bash
 
-CONFIG_FILE="/etc/key_command_config"
+# Place the config file in a user-accessible directory
+CONFIG_FILE="$HOME/.config/key_command_config"
 TMP_FILE="/tmp/key_pressed"
+
+# Ensure the configuration directory exists
+mkdir -p "$(dirname "$CONFIG_FILE")"
 
 # Generate default config file if it doesn't exist
 if [ ! -f "$CONFIG_FILE" ]; then
