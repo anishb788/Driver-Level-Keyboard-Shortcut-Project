@@ -10,33 +10,49 @@ mkdir -p "$(dirname "$CONFIG_FILE")"
 # Generate default config file if it doesn't exist
 if [ ! -f "$CONFIG_FILE" ]; then
     cat <<EOL > "$CONFIG_FILE"
-64353="/usr/bin/firefox \"https://www.youtube.com/watch?v=qWNQUvIk954\""
-64354="xfce4-terminal"
+64353=0:/usr/bin/firefox "https://www.youtube.com/watch?v=qWNQUvIk954"
+64354=2000:xfce4-terminal
+64353,64354=3000:/usr/bin/gedit
 EOL
     echo "Generated default config at $CONFIG_FILE"
 fi
 
 while true; do
-    # Wait for a key press to be written
     inotifywait -e close_write "$TMP_FILE" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
-        # Read the key from the temporary file
-        KEY=$(cat "$TMP_FILE" | tr -d '\n')
+        KEYS=$(cat "$TMP_FILE" | tr -d '\n')
+        if [ -n "$KEYS" ]; then
+            IFS=',' read -r -a PRESS_EVENTS <<< "$KEYS"
 
-        if [ -n "$KEY" ]; then
-            # Read the config file and look for a matching key
             while IFS= read -r LINE; do
-                CONFIG_KEY=$(echo "$LINE" | cut -d '=' -f 1)
-                COMMAND=$(echo "$LINE" | cut -d '=' -f 2- | tr -d '"')
+                CONFIG_KEYS=$(echo "$LINE" | cut -d '=' -f 1)
+                HOLD_TIME=$(echo "$LINE" | cut -d ':' -f 1 | cut -d '=' -f 2)
+                COMMAND=$(echo "$LINE" | cut -d ':' -f 2-)
 
-                if [ "$KEY" = "$CONFIG_KEY" ]; then
+                MATCH=true
+                for CONFIG_KEY in $(echo "$CONFIG_KEYS" | tr ',' ' '); do
+                    if ! echo "${PRESS_EVENTS[@]}" | grep -q "$CONFIG_KEY"; then
+                        MATCH=false
+                        break
+                    fi
+                done
+
+                if $MATCH; then
+                    for EVENT in "${PRESS_EVENTS[@]}"; do
+                        IFS=':' read -r KEY TIME <<< "$EVENT"
+                        if (( TIME < HOLD_TIME )); then
+                            MATCH=false
+                            break
+                        fi
+                    done
+                fi
+
+                if $MATCH; then
                     echo "Executing: $COMMAND"
                     bash -c "$COMMAND" &
                     break
                 fi
             done < "$CONFIG_FILE"
-        else
-            echo "No key found in $TMP_FILE."
         fi
     fi
 done

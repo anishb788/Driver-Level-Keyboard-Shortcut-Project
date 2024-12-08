@@ -6,39 +6,83 @@
 #include <linux/workqueue.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
+#include <linux/timekeeping.h>
 
 #define TMP_FILE_PATH "/tmp/key_pressed"
+#define MAX_KEYS 10
 
+struct key_info {
+    unsigned int key_code;
+    ktime_t press_time;
+    bool pressed;
+};
+
+static struct key_info key_states[MAX_KEYS];
 static struct workqueue_struct *wq;
 static struct work_struct write_key_work;
 
-static unsigned int last_key = 0;
+// Helper function to get the current time in milliseconds
+static unsigned long long current_time_ms(void) {
+    struct timespec64 ts;
+    ktime_get_real_ts64(&ts);
+    return (ts.tv_sec * 1000LL) + (ts.tv_nsec / 1000000LL);
+}
 
-// Function to write key press to /tmp/key_pressed
+// Function to write keys and hold durations to /tmp/key_pressed
 void write_key_task(struct work_struct *work) {
     struct file *file;
-    char key_str[16];
-    loff_t pos = 0;
+    char buffer[256];
+    int offset = 0, i;
 
-    snprintf(key_str, sizeof(key_str), "%u\n", last_key);
+    for (i = 0; i < MAX_KEYS; i++) {
+        if (key_states[i].pressed) {
+            unsigned long long hold_time = 
+                current_time_ms() - key_states[i].press_time;
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               "%u:%llu,", key_states[i].key_code, hold_time);
+        }
+    }
 
-    file = filp_open(TMP_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (!IS_ERR(file)) {
-        kernel_write(file, key_str, strlen(key_str), &pos);
-        filp_close(file, NULL);
-        printk(KERN_INFO "Key pressed: %s\n", key_str);
-    } else {
-        printk(KERN_ERR "Failed to write to %s.\n", TMP_FILE_PATH);
+    if (offset > 0) {
+        buffer[offset - 1] = '\n'; // Replace last comma with newline
+        file = filp_open(TMP_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (!IS_ERR(file)) {
+            loff_t pos = 0;
+            kernel_write(file, buffer, offset, &pos);
+            filp_close(file, NULL);
+            printk(KERN_INFO "Keys written: %s\n", buffer);
+        } else {
+            printk(KERN_ERR "Failed to write to %s.\n", TMP_FILE_PATH);
+        }
     }
 }
 
 // Keyboard notifier callback
 static int keyboard_notifier_callback(struct notifier_block *nblock, unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
+    int i;
 
-    if (action == KBD_KEYSYM && param->down) {
-        last_key = param->value;
-        schedule_work(&write_key_work); // Schedule the work to write key to /tmp/key_pressed
+    if (action == KBD_KEYSYM) {
+        if (param->down) {
+            // Handle key press
+            for (i = 0; i < MAX_KEYS; i++) {
+                if (key_states[i].key_code == param->value || !key_states[i].pressed) {
+                    key_states[i].key_code = param->value;
+                    key_states[i].press_time = current_time_ms();
+                    key_states[i].pressed = true;
+                    break;
+                }
+            }
+        } else {
+            // Handle key release
+            for (i = 0; i < MAX_KEYS; i++) {
+                if (key_states[i].key_code == param->value && key_states[i].pressed) {
+                    key_states[i].pressed = false;
+                    break;
+                }
+            }
+        }
+        schedule_work(&write_key_work); // Schedule the work to write keys
     }
 
     return NOTIFY_OK;
@@ -51,9 +95,7 @@ static struct notifier_block nb = {
 
 // Initialize module
 static int __init shortcut_init(void) {
-    int ret;
-
-    ret = register_keyboard_notifier(&nb);
+    int ret = register_keyboard_notifier(&nb);
     if (ret) {
         printk(KERN_ERR "Failed to register keyboard notifier.\n");
         return ret;
@@ -83,4 +125,4 @@ module_exit(shortcut_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Anish Boddu, Evan Digles");
-MODULE_DESCRIPTION("Keyboard shortcut driver to execute commands dynamically.");
+MODULE_DESCRIPTION("Keyboard shortcut driver to handle key combinations and durations.");

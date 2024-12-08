@@ -35,27 +35,28 @@ MODULE_INFO(retpoline, "Y");
 
 static const struct modversion_info ____versions[]
 __used __section("__versions") = {
-	{ 0x18833192, "filp_open" },
-	{ 0xa916b694, "strnlen" },
-	{ 0xe5ae733d, "kernel_write" },
-	{ 0x2d42b731, "filp_close" },
 	{ 0x122c3a7e, "_printk" },
 	{ 0x5b8239ca, "__x86_return_thunk" },
-	{ 0xcbd4898c, "fortify_panic" },
-	{ 0xf0fdf6cb, "__stack_chk_fail" },
-	{ 0x96554810, "register_keyboard_notifier" },
-	{ 0x49cd25ed, "alloc_workqueue" },
 	{ 0x9ed554b3, "unregister_keyboard_notifier" },
 	{ 0x9166fc03, "__flush_workqueue" },
 	{ 0x8c03d20c, "destroy_workqueue" },
 	{ 0x2d3385d3, "system_wq" },
 	{ 0xc5b6f236, "queue_work_on" },
-	{ 0xbdfb6dbb, "__fentry__" },
+	{ 0x9ec6ca96, "ktime_get_real_ts64" },
+	{ 0x87a21cb3, "__ubsan_handle_out_of_bounds" },
+	{ 0xf0fdf6cb, "__stack_chk_fail" },
+	{ 0x54b1fac6, "__ubsan_handle_load_invalid_value" },
 	{ 0x656e4a6e, "snprintf" },
+	{ 0x18833192, "filp_open" },
+	{ 0xe5ae733d, "kernel_write" },
+	{ 0x2d42b731, "filp_close" },
+	{ 0xbdfb6dbb, "__fentry__" },
+	{ 0x96554810, "register_keyboard_notifier" },
+	{ 0x49cd25ed, "alloc_workqueue" },
 	{ 0xf079b8f9, "module_layout" },
 };
 
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "BD794A3AD0D232FA7E6DAE8");
+MODULE_INFO(srcversion, "F5DC088D65C51698FD7DD2D");
