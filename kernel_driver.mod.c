@@ -33,47 +33,29 @@ MODULE_INFO(retpoline, "Y");
 
 
 
-static const char ____versions[]
-__used __section("__versions") =
-	"\x10\x00\x00\x00\x94\xb6\x16\xa9"
-	"strnlen\0"
-	"\x18\x00\x00\x00\x3d\x73\xae\xe5"
-	"kernel_write\0\0\0\0"
-	"\x14\x00\x00\x00\x31\xb7\x42\x2d"
-	"filp_close\0\0"
-	"\x10\x00\x00\x00\x7e\x3a\x2c\x12"
-	"_printk\0"
-	"\x1c\x00\x00\x00\xca\x39\x82\x5b"
-	"__x86_return_thunk\0\0"
-	"\x18\x00\x00\x00\x8c\x89\xd4\xcb"
-	"fortify_panic\0\0\0"
-	"\x24\x00\x00\x00\x10\x48\x55\x96"
-	"register_keyboard_notifier\0\0"
-	"\x18\x00\x00\x00\xed\x25\xcd\x49"
-	"alloc_workqueue\0"
-	"\x28\x00\x00\x00\xb3\x54\xd5\x9e"
-	"unregister_keyboard_notifier\0\0\0\0"
-	"\x1c\x00\x00\x00\x03\xfc\x66\x91"
-	"__flush_workqueue\0\0\0"
-	"\x1c\x00\x00\x00\x0c\xd2\x03\x8c"
-	"destroy_workqueue\0\0\0"
-	"\x10\x00\x00\x00\xda\xfa\x66\x91"
-	"strncpy\0"
-	"\x14\x00\x00\x00\xd3\x85\x33\x2d"
-	"system_wq\0\0\0"
-	"\x18\x00\x00\x00\x36\xf2\xb6\xc5"
-	"queue_work_on\0\0\0"
-	"\x28\x00\x00\x00\xb3\x1c\xa2\x87"
-	"__ubsan_handle_out_of_bounds\0\0\0\0"
-	"\x14\x00\x00\x00\xbb\x6d\xfb\xbd"
-	"__fentry__\0\0"
-	"\x14\x00\x00\x00\x92\x31\x83\x18"
-	"filp_open\0\0\0"
-	"\x18\x00\x00\x00\x3a\x0a\xd8\xfc"
-	"module_layout\0\0\0"
-	"\x00\x00\x00\x00\x00\x00\x00\x00";
+static const struct modversion_info ____versions[]
+__used __section("__versions") = {
+	{ 0x18833192, "filp_open" },
+	{ 0xa916b694, "strnlen" },
+	{ 0xe5ae733d, "kernel_write" },
+	{ 0x2d42b731, "filp_close" },
+	{ 0x122c3a7e, "_printk" },
+	{ 0x5b8239ca, "__x86_return_thunk" },
+	{ 0xcbd4898c, "fortify_panic" },
+	{ 0xf0fdf6cb, "__stack_chk_fail" },
+	{ 0x96554810, "register_keyboard_notifier" },
+	{ 0x49cd25ed, "alloc_workqueue" },
+	{ 0x9ed554b3, "unregister_keyboard_notifier" },
+	{ 0x9166fc03, "__flush_workqueue" },
+	{ 0x8c03d20c, "destroy_workqueue" },
+	{ 0x2d3385d3, "system_wq" },
+	{ 0xc5b6f236, "queue_work_on" },
+	{ 0xbdfb6dbb, "__fentry__" },
+	{ 0x656e4a6e, "snprintf" },
+	{ 0xf079b8f9, "module_layout" },
+};
 
 MODULE_INFO(depends, "");
 
 
-MODULE_INFO(srcversion, "78F1E4EEF904964F443C5B3");
+MODULE_INFO(srcversion, "BD794A3AD0D232FA7E6DAE8");

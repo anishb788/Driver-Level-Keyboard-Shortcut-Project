@@ -3,58 +3,42 @@
 #include <linux/keyboard.h>
 #include <linux/input-event-codes.h>
 #include <linux/notifier.h>
+#include <linux/workqueue.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
-#include <linux/cdev.h>
-#include <linux/device.h>
 
-#define MAX_CMD_LEN 256
-#define MAX_KEYS 10
+#define TMP_FILE_PATH "/tmp/key_pressed"
 
-struct key_command_mapping {
-    unsigned int key_code;
-    char command[MAX_CMD_LEN];
-};
-
-static struct key_command_mapping key_map[MAX_KEYS] = {
-    {64353, "/usr/bin/firefox \"https://www.youtube.com/watch?v=qWNQUvIk954\"\n"},
-    {64354, "xfce4-terminal\n"}
-};
-
-// Recommended by ChatGPT to prevent infinite recursion:
 static struct workqueue_struct *wq;
-static struct work_struct write_command_work;
+static struct work_struct write_key_work;
 
-static char current_command[MAX_CMD_LEN];
+static unsigned int last_key = 0;
 
-void write_command_task(struct work_struct *work) {
+// Function to write key press to /tmp/key_pressed
+void write_key_task(struct work_struct *work) {
     struct file *file;
-    file = filp_open("/tmp/trigger_action", O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    char key_str[16];
+    loff_t pos = 0;
+
+    snprintf(key_str, sizeof(key_str), "%u\n", last_key);
+
+    file = filp_open(TMP_FILE_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (!IS_ERR(file)) {
-        kernel_write(file, current_command, strlen(current_command), &file->f_pos);
+        kernel_write(file, key_str, strlen(key_str), &pos);
         filp_close(file, NULL);
-        printk(KERN_INFO "Command written: %s\n", current_command);
+        printk(KERN_INFO "Key pressed: %s\n", key_str);
     } else {
-        printk(KERN_ERR "Failed to write to /tmp/trigger_action.\n");
+        printk(KERN_ERR "Failed to write to %s.\n", TMP_FILE_PATH);
     }
 }
 
 // Keyboard notifier callback
-static int keyboard_notifier_callback(struct notifier_block *nblock,
-                                      unsigned long action, void *data) {
+static int keyboard_notifier_callback(struct notifier_block *nblock, unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
-    int i;
 
     if (action == KBD_KEYSYM && param->down) {
-        for (i = 0; i < MAX_KEYS; i++) {
-            if (key_map[i].key_code == param->value) {
-                printk(KERN_INFO "Shortcut detected: Key %u pressed.\n", param->value);
-                strncpy(current_command, key_map[i].command, MAX_CMD_LEN);
-                current_command[MAX_CMD_LEN - 1] = '\0'; // Ensure null termination
-                schedule_work(&write_command_work);  // Schedule the work
-                break;
-            }
-        }
+        last_key = param->value;
+        schedule_work(&write_key_work); // Schedule the work to write key to /tmp/key_pressed
     }
 
     return NOTIFY_OK;
@@ -67,7 +51,9 @@ static struct notifier_block nb = {
 
 // Initialize module
 static int __init shortcut_init(void) {
-    int ret = register_keyboard_notifier(&nb);
+    int ret;
+
+    ret = register_keyboard_notifier(&nb);
     if (ret) {
         printk(KERN_ERR "Failed to register keyboard notifier.\n");
         return ret;
@@ -78,7 +64,8 @@ static int __init shortcut_init(void) {
         printk(KERN_ERR "Failed to create workqueue.\n");
         return -ENOMEM;
     }
-    INIT_WORK(&write_command_work, write_command_task);
+    INIT_WORK(&write_key_work, write_key_task);
+
     printk(KERN_INFO "Shortcut driver initialized successfully.\n");
     return 0;
 }
@@ -96,4 +83,4 @@ module_exit(shortcut_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Anish Boddu, Evan Digles");
-MODULE_DESCRIPTION("Keyboard shortcut driver to execute commands");
+MODULE_DESCRIPTION("Keyboard shortcut driver to execute commands dynamically.");

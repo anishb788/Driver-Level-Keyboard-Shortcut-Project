@@ -1,19 +1,38 @@
 #!/bin/bash
 
-FILE="/tmp/trigger_action"
-USER="$USER"  # Replace with the actual username
+CONFIG_FILE="/etc/key_command_config"
+TMP_FILE="/tmp/key_pressed"
+
+# Generate default config file if it doesn't exist
+if [ ! -f "$CONFIG_FILE" ]; then
+    cat <<EOL > "$CONFIG_FILE"
+64353="/usr/bin/firefox \"https://www.youtube.com/watch?v=qWNQUvIk954\""
+64354="xfce4-terminal"
+EOL
+    echo "Generated default config at $CONFIG_FILE"
+fi
 
 while true; do
-    inotifywait -e close_write "$FILE" >/dev/null 2>&1
+    # Wait for a key press to be written
+    inotifywait -e close_write "$TMP_FILE" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
-        COMMAND=$(cat "$FILE")
-        if [ -n "$COMMAND" ]; then
-            echo "Executing: $COMMAND"
-            bash "$COMMAND" &
-            #sudo -u "$USER" bash -c "$COMMAND"
-            echo "Command executed successfully."
+        # Read the key from the temporary file
+        KEY=$(cat "$TMP_FILE" | tr -d '\n')
+
+        if [ -n "$KEY" ]; then
+            # Read the config file and look for a matching key
+            while IFS= read -r LINE; do
+                CONFIG_KEY=$(echo "$LINE" | cut -d '=' -f 1)
+                COMMAND=$(echo "$LINE" | cut -d '=' -f 2- | tr -d '"')
+
+                if [ "$KEY" = "$CONFIG_KEY" ]; then
+                    echo "Executing: $COMMAND"
+                    bash -c "$COMMAND" &
+                    break
+                fi
+            done < "$CONFIG_FILE"
         else
-            echo "No command found in $FILE."
+            echo "No key found in $TMP_FILE."
         fi
     fi
 done
