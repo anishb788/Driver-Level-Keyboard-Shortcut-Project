@@ -12,12 +12,13 @@ if [ ! -f "$CONFIG_FILE" ]; then
     cat <<EOL > "$CONFIG_FILE"
 64353=0:/usr/bin/firefox "https://www.youtube.com/watch?v=qWNQUvIk954"
 64354=2000:xfce4-terminal
-64353,64354=3000:/usr/bin/gedit
+64353,64354=3000:/usr/bin/mousepad
 EOL
     echo "Generated default config at $CONFIG_FILE"
 fi
 
 while true; do
+    cat $TMP_FILE
     inotifywait -e close_write "$TMP_FILE" >/dev/null 2>&1
     if [ $? -eq 0 ]; then
         KEYS=$(cat "$TMP_FILE" | tr -d '\n')

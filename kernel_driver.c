@@ -59,24 +59,41 @@ void write_key_task(struct work_struct *work) {
 }
 
 // Keyboard notifier callback
-static int keyboard_notifier_callback(struct notifier_block *nblock, unsigned long action, void *data) {
+static int keyboard_notifier_callback(struct notifier_block *nblock, 
+                                      unsigned long action, void *data) {
     struct keyboard_notifier_param *param = data;
     int i;
 
     if (action == KBD_KEYSYM) {
+        // "Down" event means key is pressed or autorepeated
         if (param->down) {
-            // Handle key press
+            // Find the key in the array first
+            int free_index = -1;
+            int key_index = -1;
             for (i = 0; i < MAX_KEYS; i++) {
-                if (key_states[i].key_code == param->value || !key_states[i].pressed) {
-                    key_states[i].key_code = param->value;
-                    key_states[i].press_time = current_time_ms();
-                    key_states[i].pressed = true;
-                    key_states[i].command_executed = false; // Reset execution flag
+                if (key_states[i].pressed && key_states[i].key_code == param->value) {
+                    key_index = i;
                     break;
                 }
+                if (!key_states[i].pressed && free_index == -1)
+                    free_index = i;
             }
+
+            // If the key isn't already pressed
+            if (key_index == -1) {
+                // New press (not just a repeat)
+                if (free_index != -1) {
+                    key_states[free_index].key_code = param->value;
+                    key_states[free_index].press_time = current_time_ms();
+                    key_states[free_index].pressed = true;
+                    key_states[free_index].command_executed = false;
+                } else {
+                    printk(KERN_WARNING "No free slot for key %u\n", param->value);
+                }
+            } 
+            // else if (key_index != -1), the key is already pressed, so do nothing for repeats
         } else {
-            // Handle key release
+            // Key release event
             for (i = 0; i < MAX_KEYS; i++) {
                 if (key_states[i].key_code == param->value && key_states[i].pressed) {
                     key_states[i].pressed = false;
@@ -84,7 +101,9 @@ static int keyboard_notifier_callback(struct notifier_block *nblock, unsigned lo
                 }
             }
         }
-        schedule_work(&write_key_work); // Schedule the work to write keys
+
+        // Schedule write work after handling
+        schedule_work(&write_key_work);
     }
 
     return NOTIFY_OK;
