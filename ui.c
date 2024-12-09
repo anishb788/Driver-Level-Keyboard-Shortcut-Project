@@ -11,10 +11,10 @@
 
 /* The model columns */
 enum {
-    COL_ACTIONS = 0,
-    COL_DELAY,
-    COL_COMMAND,
-    NUM_COLS
+    COLUMN_ACTIONS = 0,
+    COLUMN_DELAY,
+    COLUMN_COMMAND,
+    NUM_COLUMNS
 };
 
 /* Global references */
@@ -106,9 +106,9 @@ static void load_config(GtkListStore *store) {
             GtkTreeIter iter;
             gtk_list_store_append(store, &iter);
             gtk_list_store_set(store, &iter,
-                               COL_ACTIONS, actions,
-                               COL_DELAY, delay,
-                               COL_COMMAND, command,
+                               COLUMN_ACTIONS, actions,
+                               COLUMN_DELAY, delay,
+                               COLUMN_COMMAND, command,
                                -1);
             g_free(actions);
             g_free(delay);
@@ -138,9 +138,9 @@ static void save_config(GtkListStore *store) {
         gchar *delay = NULL;
         gchar *command = NULL;
         gtk_tree_model_get(GTK_TREE_MODEL(store), &iter,
-                           COL_ACTIONS, &actions,
-                           COL_DELAY, &delay,
-                           COL_COMMAND, &command,
+                           COLUMN_ACTIONS, &actions,
+                           COLUMN_DELAY, &delay,
+                           COLUMN_COMMAND, &command,
                            -1);
 
         if (actions && delay && command && *actions != '\0' && *delay != '\0' && *command != '\0') {
@@ -167,9 +167,9 @@ static void add_entry_button(GtkButton *button, gpointer user_data) {
     GtkTreeIter iter;
     gtk_list_store_append(store, &iter);
     gtk_list_store_set(store, &iter,
-                       COL_ACTIONS, "",
-                       COL_DELAY, "",
-                       COL_COMMAND, "",
+                       COLUMN_ACTIONS, "",
+                       COLUMN_DELAY, "",
+                       COLUMN_COMMAND, "",
                        -1);
 }
 
@@ -200,7 +200,7 @@ static void on_editing_started(GtkCellRenderer *renderer, GtkCellEditable *edita
     current_editing_column = column;
 
     // Clear the cell if it is the Actions column
-    if (column == COL_ACTIONS) {
+    if (column == COLUMN_ACTIONS) {
         GtkEditable *edit = GTK_EDITABLE(editable);
         // Delete all text to start with an empty cell
         gtk_editable_delete_text(edit, 0, -1);
@@ -225,7 +225,7 @@ static void on_editing_canceled(GtkCellEditable *editable, gpointer user_data) {
 static gboolean key_event_handler(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
     if (event->keyval == GDK_KEY_Tab) {
         // If editing the Actions column, insert a tab code
-        if (current_editor && current_editing_column == COL_ACTIONS) {
+        if (current_editor && current_editing_column == COLUMN_ACTIONS) {
             GtkEditable *editable = GTK_EDITABLE(widget);
             gchar *current_text = gtk_editable_get_chars(editable, 0, -1);
 
@@ -259,7 +259,7 @@ static void cell_filter(GtkCellRendererText *renderer, gchar *path, gchar *new_t
     if (gtk_tree_model_get_iter(GTK_TREE_MODEL(store), &iter, tree_path)) {
         gint column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(renderer), "column"));
 
-        if (column == COL_ACTIONS) {
+        if (column == COLUMN_ACTIONS) {
             // Filter out non-digit and non-comma chars
             GString *filtered = g_string_new(NULL);
             for (const gchar *p = new_text; *p; p++) {
@@ -299,7 +299,7 @@ static void driver_key_parser(void) {
     gtk_label_set_text(GTK_LABEL(log_label), contents);
 
     // Only modify if editing Actions column
-    if (current_editor && current_editing_column == COL_ACTIONS) {
+    if (current_editor && current_editing_column == COLUMN_ACTIONS) {
         gchar **lines = g_strsplit(contents, "\n", -1);
         const char *line = NULL;
         for (int i = 0; lines[i] != NULL; i++) {
@@ -363,7 +363,7 @@ int main(int argc, char *argv[]) {
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
     gtk_container_add(GTK_CONTAINER(window), vbox);
 
-    store = gtk_list_store_new(NUM_COLS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+    store = gtk_list_store_new(NUM_COLUMNS, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
     load_config(store);
 
     GtkWidget *treeview = gtk_tree_view_new_with_model(GTK_TREE_MODEL(store));
@@ -376,26 +376,26 @@ int main(int argc, char *argv[]) {
     // Actions Column
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
-    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_ACTIONS));
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_ACTIONS));
     g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
     g_signal_connect(renderer, "editing-started", G_CALLBACK(on_editing_started), NULL);
-    column = gtk_tree_view_column_new_with_attributes("Actions", renderer, "text", COL_ACTIONS, NULL);
+    column = gtk_tree_view_column_new_with_attributes("Actions", renderer, "text", COLUMN_ACTIONS, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
 
     // Delay Column
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
-    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_DELAY));
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_DELAY));
     g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
-    column = gtk_tree_view_column_new_with_attributes("Delay (ms)", renderer, "text", COL_DELAY, NULL);
+    column = gtk_tree_view_column_new_with_attributes("Delay (ms)", renderer, "text", COLUMN_DELAY, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
 
     // Command Column
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
-    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_COMMAND));
+    g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COLUMN_COMMAND));
     g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
-    column = gtk_tree_view_column_new_with_attributes("Command", renderer, "text", COL_COMMAND, NULL);
+    column = gtk_tree_view_column_new_with_attributes("Command", renderer, "text", COLUMN_COMMAND, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
 
     GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
