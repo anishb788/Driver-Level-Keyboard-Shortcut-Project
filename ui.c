@@ -3,8 +3,13 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-#define CONFIG_FILE "keyboard_config.txt"
+#define CONFIG_FILE "$HOME/.config/key_command_config"
 #define KEY_FILE "/tmp/key_pressed"
+
+#include <gtk/gtk.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
 
 /* The model columns */
 enum {
@@ -29,9 +34,27 @@ static void on_delete_entry_button_clicked(GtkButton *button, gpointer user_data
 static void on_save_button_clicked(GtkButton *button, gpointer user_data);
 static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other_file, GFileMonitorEvent event_type, gpointer user_data);
 static void parse_key_file_and_update_ui(void);
-static gboolean is_actions_text_valid(const gchar *text);
+static gboolean on_editor_key_press_event(GtkWidget *widget, GdkEventKey *event, gpointer user_data);
 
-/* Parse config lines */
+/* We'll store the config file path in a global variable set at runtime */
+static gchar *config_file_path = NULL;
+
+static gboolean is_actions_text_valid(const gchar *text) {
+    for (const gchar *p = text; *p; p++) {
+        if (!g_ascii_isdigit(*p) && *p != ',')
+            return FALSE; 
+    }
+    return TRUE;
+}
+
+static void sanitize_actions_text(GString *filtered) {
+    // Remove leading commas
+    while (filtered->len > 0 && filtered->str[0] == ',') {
+        g_string_erase(filtered, 0, 1);
+    }
+}
+
+/* Parse a single config line */
 static gboolean parse_config_line(const char *line, char **actions_out, char **delay_out, char **command_out) {
     const char *eq = strchr(line, '=');
     if (!eq) return FALSE;
@@ -63,10 +86,11 @@ static gboolean parse_config_line(const char *line, char **actions_out, char **d
 /* Load config file */
 static void load_config(GtkListStore *store) {
     g_return_if_fail(GTK_IS_LIST_STORE(store));
+    if (!config_file_path) return;
 
-    FILE *f = fopen(CONFIG_FILE, "r");
+    FILE *f = fopen(config_file_path, "r");
     if (!f) {
-        g_warning("Could not open config file: %s", CONFIG_FILE);
+        g_warning("Could not open config file: %s", config_file_path);
         return;
     }
 
@@ -101,10 +125,11 @@ static void load_config(GtkListStore *store) {
 /* Save config file */
 static void save_config(GtkListStore *store) {
     g_return_if_fail(GTK_IS_LIST_STORE(store));
+    if (!config_file_path) return;
 
-    FILE *f = fopen(CONFIG_FILE, "w");
+    FILE *f = fopen(config_file_path, "w");
     if (!f) {
-        g_warning("Could not write to config file: %s", CONFIG_FILE);
+        g_warning("Could not write to config file: %s", config_file_path);
         return;
     }
 
@@ -134,7 +159,7 @@ static void save_config(GtkListStore *store) {
     }
 
     fclose(f);
-    g_message("Configuration saved to %s.", CONFIG_FILE);
+    g_message("Configuration saved to %s.", config_file_path);
 }
 
 /* Add entry */
@@ -170,17 +195,65 @@ static void on_save_button_clicked(GtkButton *button, gpointer user_data) {
     save_config(store);
 }
 
-/* Validate actions text */
-static gboolean is_actions_text_valid(const gchar *text) {
-    for (const gchar *p = text; *p; p++) {
-        if (!g_ascii_isdigit(*p) && *p != ',')
-            return FALSE; 
+/* Editing started: record editor and column, connect key-press-event */
+static void on_editing_started(GtkCellRenderer *renderer, GtkCellEditable *editable, const gchar *path, gpointer user_data) {
+    current_editor = editable;
+    gint column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(renderer), "column"));
+    current_editing_column = column;
+
+    // Clear the cell if it is the Actions column
+    if (column == COL_ACTIONS) {
+        GtkEditable *edit = GTK_EDITABLE(editable);
+        // Delete all text to start with an empty cell
+        gtk_editable_delete_text(edit, 0, -1);
     }
-    return TRUE;
+
+    // Connect "editing-canceled"
+    g_signal_connect(editable, "editing-canceled", G_CALLBACK(on_editing_canceled), NULL);
+
+    // Connect key-press-event to intercept Tab
+    g_signal_connect(editable, "key-press-event", G_CALLBACK(on_editor_key_press_event), NULL);
 }
 
-/* Cell edited callback: Filter Actions column input to only digits and commas */
-/* Cell edited callback: Filter Actions column input to only digits and commas, no leading commas */
+
+/* Editing canceled */
+static void on_editing_canceled(GtkCellEditable *editable, gpointer user_data) {
+    // Reset the editor pointers
+    current_editor = NULL;
+    current_editing_column = -1;
+}
+
+/* Key-press-event handler for the editing widget (to capture Tab) */
+static gboolean on_editor_key_press_event(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
+    if (event->keyval == GDK_KEY_Tab) {
+        // If editing the Actions column, insert a tab code
+        if (current_editor && current_editing_column == COL_ACTIONS) {
+            GtkEditable *editable = GTK_EDITABLE(widget);
+            gchar *current_text = gtk_editable_get_chars(editable, 0, -1);
+
+            // Append "65289" for Tab
+            GString *new_value = g_string_new(current_text && *current_text ? current_text : "");
+            if (new_value->len > 0)
+                g_string_append(new_value, ",");
+            g_string_append(new_value, "65289");
+
+            gtk_editable_delete_text(editable, 0, -1);
+            gint pos = 0;
+            gtk_editable_insert_text(editable, new_value->str, -1, &pos);
+
+            g_string_free(new_value, TRUE);
+            g_free(current_text);
+
+            // Return TRUE to prevent focus from leaving the cell
+            return TRUE;
+        }
+    }
+
+    // Default handling
+    return FALSE;
+}
+
+/* Cell edited callback: filter Actions input and no leading commas */
 static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gchar *new_text, gpointer user_data) {
     GtkListStore *store = GTK_LIST_STORE(user_data);
     GtkTreePath *tree_path = gtk_tree_path_new_from_string(path);
@@ -189,7 +262,7 @@ static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gch
         gint column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(renderer), "column"));
 
         if (column == COL_ACTIONS) {
-            /* Filter out non-digit and non-comma chars */
+            // Filter out non-digit and non-comma chars
             GString *filtered = g_string_new(NULL);
             for (const gchar *p = new_text; *p; p++) {
                 if (g_ascii_isdigit(*p) || *p == ',') {
@@ -197,46 +270,23 @@ static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gch
                 }
             }
 
-            /* Remove leading commas */
-            while (filtered->str[0] == ',') {
-                g_string_erase(filtered, 0, 1);
-            }
+            // Remove leading commas
+            sanitize_actions_text(filtered);
 
-            /* Set the filtered value */
             gtk_list_store_set(store, &iter, column, filtered->str, -1);
             g_string_free(filtered, TRUE);
         } else {
-            /* For other columns, just set the value directly */
             gtk_list_store_set(store, &iter, column, new_text, -1);
         }
     }
     gtk_tree_path_free(tree_path);
 
-    /* Editing done, reset the editor pointers */
+    // Editing done, reset
     current_editor = NULL;
     current_editing_column = -1;
 }
 
-
-
-/* Called when editing starts */
-static void on_editing_started(GtkCellRenderer *renderer, GtkCellEditable *editable, const gchar *path, gpointer user_data) {
-    current_editor = editable;
-    gint column = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(renderer), "column"));
-    current_editing_column = column;
-
-    // Connect "editing-done" and "editing-canceled" signals to reset pointers
-    g_signal_connect(editable, "editing-canceled", G_CALLBACK(on_editing_canceled), NULL);
-}
-
-/* Called if editing is canceled */
-static void on_editing_canceled(GtkCellEditable *editable, gpointer user_data) {
-    // Editing canceled, reset the editor pointers
-    current_editor = NULL;
-    current_editing_column = -1;
-}
-
-/* Parse the file and update UI */
+/* Parse /tmp/key_pressed and update UI */
 static void parse_key_file_and_update_ui(void) {
     gchar *contents = NULL;
     gsize length = 0;
@@ -250,7 +300,7 @@ static void parse_key_file_and_update_ui(void) {
 
     gtk_label_set_text(GTK_LABEL(log_label), contents);
 
-    // Only modify the Actions cell if currently editing the Actions column
+    // Only modify if editing Actions column
     if (current_editor && current_editing_column == COL_ACTIONS) {
         gchar **lines = g_strsplit(contents, "\n", -1);
         const char *line = NULL;
@@ -303,6 +353,9 @@ static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other_fil
 
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
+
+    // Build the config file path: $HOME/.config/key_command_config
+    config_file_path = g_build_filename(g_get_home_dir(), ".config", "key_command_config", NULL);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Keyboard Config Editor");
@@ -366,11 +419,11 @@ int main(int argc, char *argv[]) {
     gtk_box_pack_start(GTK_BOX(vbox), log_label, FALSE, FALSE, 5);
 
     // File monitor
-    GFile *file = g_file_new_for_path(KEY_FILE);
+    GFile *file = g_file_new_for_path("/tmp/key_pressed");
     GError *error = NULL;
     GFileMonitor *monitor = g_file_monitor_file(file, G_FILE_MONITOR_NONE, NULL, &error);
     if (!monitor) {
-        g_warning("Could not monitor %s: %s", KEY_FILE, error->message);
+        g_warning("Could not monitor /tmp/key_pressed: %s", error->message);
         g_clear_error(&error);
     } else {
         g_signal_connect(monitor, "changed", G_CALLBACK(on_file_changed), NULL);
@@ -382,5 +435,7 @@ int main(int argc, char *argv[]) {
     gtk_widget_show_all(window);
     gtk_main();
 
+    // Clean up
+    g_free(config_file_path);
     return 0;
 }
