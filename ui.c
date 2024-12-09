@@ -3,13 +3,11 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+// Yeah I'm not even gonna lie, this GUI was a MASSIVE pain to code, the amount of research I had to do via stackoverflow was insane
+// this GUI is basically what provides a user friendly interface to modify the config file
+
 #define CONFIG_FILE "$HOME/.config/key_command_config"
 #define KEY_FILE "/tmp/key_pressed"
-
-#include <gtk/gtk.h>
-#include <string.h>
-#include <stdlib.h>
-#include <ctype.h>
 
 /* The model columns */
 enum {
@@ -26,20 +24,20 @@ static GtkCellEditable *current_editor = NULL;
 static gint current_editing_column = -1; 
 
 /* Forward declarations */
-static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gchar *new_text, gpointer user_data);
+static void cell_filter(GtkCellRendererText *renderer, gchar *path, gchar *new_text, gpointer user_data);
 static void on_editing_started(GtkCellRenderer *renderer, GtkCellEditable *editable, const gchar *path, gpointer user_data);
 static void on_editing_canceled(GtkCellEditable *editable, gpointer user_data);
-static void on_add_entry_button_clicked(GtkButton *button, gpointer user_data);
-static void on_delete_entry_button_clicked(GtkButton *button, gpointer user_data);
-static void on_save_button_clicked(GtkButton *button, gpointer user_data);
+static void add_entry_button(GtkButton *button, gpointer user_data);
+static void delete_entry_button(GtkButton *button, gpointer user_data);
+static void save_entry_button(GtkButton *button, gpointer user_data);
 static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other_file, GFileMonitorEvent event_type, gpointer user_data);
-static void parse_key_file_and_update_ui(void);
-static gboolean on_editor_key_press_event(GtkWidget *widget, GdkEventKey *event, gpointer user_data);
+static void driver_key_parser(void);
+static gboolean key_event_handler(GtkWidget *widget, GdkEventKey *event, gpointer user_data);
 
 /* We'll store the config file path in a global variable set at runtime */
 static gchar *config_file_path = NULL;
 
-static gboolean is_actions_text_valid(const gchar *text) {
+static gboolean validity_check(const gchar *text) {
     for (const gchar *p = text; *p; p++) {
         if (!g_ascii_isdigit(*p) && *p != ',')
             return FALSE; 
@@ -47,7 +45,7 @@ static gboolean is_actions_text_valid(const gchar *text) {
     return TRUE;
 }
 
-static void sanitize_actions_text(GString *filtered) {
+static void remove_commas(GString *filtered) {
     // Remove leading commas
     while (filtered->len > 0 && filtered->str[0] == ',') {
         g_string_erase(filtered, 0, 1);
@@ -55,7 +53,7 @@ static void sanitize_actions_text(GString *filtered) {
 }
 
 /* Parse a single config line */
-static gboolean parse_config_line(const char *line, char **actions_out, char **delay_out, char **command_out) {
+static gboolean read_config(const char *line, char **actions_out, char **delay_out, char **command_out) {
     const char *eq = strchr(line, '=');
     if (!eq) return FALSE;
 
@@ -104,7 +102,7 @@ static void load_config(GtkListStore *store) {
         char *actions = NULL;
         char *delay = NULL;
         char *command = NULL;
-        if (parse_config_line(line, &actions, &delay, &command)) {
+        if (read_config(line, &actions, &delay, &command)) {
             GtkTreeIter iter;
             gtk_list_store_append(store, &iter);
             gtk_list_store_set(store, &iter,
@@ -163,7 +161,7 @@ static void save_config(GtkListStore *store) {
 }
 
 /* Add entry */
-static void on_add_entry_button_clicked(GtkButton *button, gpointer user_data) {
+static void add_entry_button(GtkButton *button, gpointer user_data) {
     GtkListStore *store = GTK_LIST_STORE(user_data);
 
     GtkTreeIter iter;
@@ -176,7 +174,7 @@ static void on_add_entry_button_clicked(GtkButton *button, gpointer user_data) {
 }
 
 /* Delete entry */
-static void on_delete_entry_button_clicked(GtkButton *button, gpointer user_data) {
+static void delete_entry_button(GtkButton *button, gpointer user_data) {
     GtkWidget *treeview = GTK_WIDGET(user_data);
     GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(treeview));
     GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(treeview));
@@ -190,7 +188,7 @@ static void on_delete_entry_button_clicked(GtkButton *button, gpointer user_data
 }
 
 /* Save button */
-static void on_save_button_clicked(GtkButton *button, gpointer user_data) {
+static void save_entry_button(GtkButton *button, gpointer user_data) {
     GtkListStore *store = GTK_LIST_STORE(user_data);
     save_config(store);
 }
@@ -212,7 +210,7 @@ static void on_editing_started(GtkCellRenderer *renderer, GtkCellEditable *edita
     g_signal_connect(editable, "editing-canceled", G_CALLBACK(on_editing_canceled), NULL);
 
     // Connect key-press-event to intercept Tab
-    g_signal_connect(editable, "key-press-event", G_CALLBACK(on_editor_key_press_event), NULL);
+    g_signal_connect(editable, "key-press-event", G_CALLBACK(key_event_handler), NULL);
 }
 
 
@@ -224,7 +222,7 @@ static void on_editing_canceled(GtkCellEditable *editable, gpointer user_data) {
 }
 
 /* Key-press-event handler for the editing widget (to capture Tab) */
-static gboolean on_editor_key_press_event(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
+static gboolean key_event_handler(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
     if (event->keyval == GDK_KEY_Tab) {
         // If editing the Actions column, insert a tab code
         if (current_editor && current_editing_column == COL_ACTIONS) {
@@ -254,7 +252,7 @@ static gboolean on_editor_key_press_event(GtkWidget *widget, GdkEventKey *event,
 }
 
 /* Cell edited callback: filter Actions input and no leading commas */
-static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gchar *new_text, gpointer user_data) {
+static void cell_filter(GtkCellRendererText *renderer, gchar *path, gchar *new_text, gpointer user_data) {
     GtkListStore *store = GTK_LIST_STORE(user_data);
     GtkTreePath *tree_path = gtk_tree_path_new_from_string(path);
     GtkTreeIter iter;
@@ -271,7 +269,7 @@ static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gch
             }
 
             // Remove leading commas
-            sanitize_actions_text(filtered);
+            remove_commas(filtered);
 
             gtk_list_store_set(store, &iter, column, filtered->str, -1);
             g_string_free(filtered, TRUE);
@@ -287,7 +285,7 @@ static void cell_edited_callback(GtkCellRendererText *renderer, gchar *path, gch
 }
 
 /* Parse /tmp/key_pressed and update UI */
-static void parse_key_file_and_update_ui(void) {
+static void driver_key_parser(void) {
     gchar *contents = NULL;
     gsize length = 0;
     GError *error = NULL;
@@ -347,7 +345,7 @@ static void parse_key_file_and_update_ui(void) {
 static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other_file, GFileMonitorEvent event_type, gpointer user_data) {
     if (event_type == G_FILE_MONITOR_EVENT_CHANGED ||
         event_type == G_FILE_MONITOR_EVENT_CREATED) {
-        parse_key_file_and_update_ui();
+        driver_key_parser();
     }
 }
 
@@ -379,7 +377,7 @@ int main(int argc, char *argv[]) {
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_ACTIONS));
-    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), store);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
     g_signal_connect(renderer, "editing-started", G_CALLBACK(on_editing_started), NULL);
     column = gtk_tree_view_column_new_with_attributes("Actions", renderer, "text", COL_ACTIONS, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
@@ -388,7 +386,7 @@ int main(int argc, char *argv[]) {
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_DELAY));
-    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), store);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
     column = gtk_tree_view_column_new_with_attributes("Delay (ms)", renderer, "text", COL_DELAY, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
 
@@ -396,7 +394,7 @@ int main(int argc, char *argv[]) {
     renderer = gtk_cell_renderer_text_new();
     g_object_set(renderer, "editable", TRUE, NULL);
     g_object_set_data(G_OBJECT(renderer), "column", GINT_TO_POINTER(COL_COMMAND));
-    g_signal_connect(renderer, "edited", G_CALLBACK(cell_edited_callback), store);
+    g_signal_connect(renderer, "edited", G_CALLBACK(cell_filter), store);
     column = gtk_tree_view_column_new_with_attributes("Command", renderer, "text", COL_COMMAND, NULL);
     gtk_tree_view_append_column(GTK_TREE_VIEW(treeview), column);
 
@@ -404,15 +402,15 @@ int main(int argc, char *argv[]) {
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
 
     GtkWidget *add_button = gtk_button_new_with_label("Add Entry");
-    g_signal_connect(add_button, "clicked", G_CALLBACK(on_add_entry_button_clicked), store);
+    g_signal_connect(add_button, "clicked", G_CALLBACK(add_entry_button), store);
     gtk_box_pack_start(GTK_BOX(hbox), add_button, FALSE, FALSE, 0);
 
     GtkWidget *delete_button = gtk_button_new_with_label("Delete Entry");
-    g_signal_connect(delete_button, "clicked", G_CALLBACK(on_delete_entry_button_clicked), treeview);
+    g_signal_connect(delete_button, "clicked", G_CALLBACK(delete_entry_button), treeview);
     gtk_box_pack_start(GTK_BOX(hbox), delete_button, FALSE, FALSE, 0);
 
     GtkWidget *save_button = gtk_button_new_with_label("Save");
-    g_signal_connect(save_button, "clicked", G_CALLBACK(on_save_button_clicked), store);
+    g_signal_connect(save_button, "clicked", G_CALLBACK(save_entry_button), store);
     gtk_box_pack_start(GTK_BOX(hbox), save_button, FALSE, FALSE, 0);
 
     log_label = gtk_label_new("Waiting for key data...");
@@ -430,7 +428,7 @@ int main(int argc, char *argv[]) {
     }
     g_object_unref(file);
 
-    parse_key_file_and_update_ui();
+    driver_key_parser();
 
     gtk_widget_show_all(window);
     gtk_main();
